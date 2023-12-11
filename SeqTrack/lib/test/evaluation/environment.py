@@ -24,6 +24,7 @@ class EnvSettings:
         self.got_packed_results_path = ''
         self.got_reports_path = ''
         self.tn_packed_results_path = ''
+        self.custom_path = ''
 
 
 def create_default_local_file():
@@ -79,6 +80,7 @@ class EnvSettings_ITP:
         self.got_packed_results_path = ''
         self.got_reports_path = ''
         self.tn_packed_results_path = ''
+        self.custom_path = os.path.join(data_dir, 'custom')
 
 
 def create_default_local_file_ITP_test(workspace_dir, data_dir, save_dir):

@@ -2,6 +2,10 @@ import random
 import torch.utils.data
 from lib.utils import TensorDict
 import numpy as np
+import logging
+
+# Add this at the beginning of your script
+logging.basicConfig(level=logging.DEBUG)
 
 
 def no_processing(data):
@@ -163,20 +167,30 @@ class TrackingSampler(torch.utils.data.Dataset):
                 template_masks = template_anno['mask'] if 'mask' in template_anno else [torch.zeros((H, W))] * self.num_template_frames
                 search_masks = search_anno['mask'] if 'mask' in search_anno else [torch.zeros((H, W))] * self.num_search_frames
 
+                # data = TensorDict({'template_images': template_frames,
+                #                    'template_anno': template_anno['bbox'],
+                #                    'template_masks': template_masks,
+                #                    'search_images': search_frames,
+                #                    'search_anno': search_anno['bbox'],
+                #                    'search_masks': search_masks,
+                #                    'dataset': dataset.get_name(),
+                #                    'test_class': meta_obj_test.get('object_class_name')})
+                
                 data = TensorDict({'template_images': template_frames,
                                    'template_anno': template_anno['bbox'],
                                    'template_masks': template_masks,
                                    'search_images': search_frames,
                                    'search_anno': search_anno['bbox'],
                                    'search_masks': search_masks,
-                                   'dataset': dataset.get_name(),
-                                   'test_class': meta_obj_test.get('object_class_name')})
+                                   'dataset': dataset.get_name()})
                 # make data augmentation
                 data = self.processing(data)
 
                 # check whether data is valid
                 valid = data['valid']
-            except:
+            except Exception as e:
+                print(f"Exception: {e}")
+                logging.exception("Exception traceback:")
                 valid = False
 
             count_valid += 1

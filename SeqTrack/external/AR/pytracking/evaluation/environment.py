@@ -24,6 +24,7 @@ class EnvSettings:
         self.got_packed_results_path = ''
         self.got_reports_path = ''
         self.tn_packed_results_path = ''
+        self.custom_path = ''
 
 
 def create_default_local_file():

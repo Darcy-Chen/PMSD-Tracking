@@ -29,6 +29,7 @@ def local_env_settings():
     settings.uav_path = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/UAV123'
     settings.vot_path = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/VOT2019'
     settings.youtubevos_dir = ''
+    settings.custom_path = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom'
 
     return settings
 

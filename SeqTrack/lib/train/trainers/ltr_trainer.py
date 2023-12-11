@@ -58,6 +58,7 @@ class LTRTrainer(BaseTrainer):
         torch.set_grad_enabled(loader.training)
 
         self._init_timing()
+
         print(self.epoch)
         print(loader.training)
 

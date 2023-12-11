@@ -22,6 +22,7 @@ def local_env_settings():
     settings.uav_path = ''
     settings.vot_path = ''
     settings.youtubevos_dir = ''
+    settings.custom_path = ''
 
     return settings
 

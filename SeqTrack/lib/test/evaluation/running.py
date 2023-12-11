@@ -6,7 +6,8 @@ from itertools import product
 from collections import OrderedDict
 from lib.test.evaluation import Sequence, Tracker
 import torch
-
+import traceback
+import sys
 
 def _save_tracker_output(seq: Sequence, tracker: Tracker, output: dict):
     """Saves the output of the tracker."""
@@ -14,11 +15,11 @@ def _save_tracker_output(seq: Sequence, tracker: Tracker, output: dict):
     if not os.path.exists(tracker.results_dir):
         print("create tracking result dir:", tracker.results_dir)
         os.makedirs(tracker.results_dir)
-    if seq.dataset in ['trackingnet', 'got10k', 'lasot', 'lasot_extension_subset', 'otb', 'uav', 'nfs', 'tnl2k']:
+    if seq.dataset in ['trackingnet', 'got10k', 'lasot', 'lasot_extension_subset', 'otb', 'uav', 'nfs', 'tnl2k', 'custom']:
         if not os.path.exists(os.path.join(tracker.results_dir, seq.dataset)):
             os.makedirs(os.path.join(tracker.results_dir, seq.dataset))
     '''2021.1.5 create new folder for these three datasets'''
-    if seq.dataset in ['trackingnet', 'got10k', 'lasot', 'lasot_extension_subset', 'otb', 'uav', 'nfs', 'tnl2k']:
+    if seq.dataset in ['trackingnet', 'got10k', 'lasot', 'lasot_extension_subset', 'otb', 'uav', 'nfs', 'tnl2k', 'custom']:
         base_results_path = os.path.join(tracker.results_dir, seq.dataset, seq.name)
     else:
         base_results_path = os.path.join(tracker.results_dir, seq.name)
@@ -112,7 +113,7 @@ def run_sequence(seq: Sequence, tracker: Tracker, debug=False, num_gpu=8):
 
     def _results_exist():
         if seq.object_ids is None:
-            if seq.dataset in ['trackingnet', 'got10k', 'lasot', 'lasot_extension_subset', 'otb', 'uav', 'nfs', 'tnl2k']:
+            if seq.dataset in ['trackingnet', 'got10k', 'lasot', 'lasot_extension_subset', 'otb', 'uav', 'nfs', 'tnl2k', 'custom']:
                 base_results_path = os.path.join(tracker.results_dir, seq.dataset, seq.name)
                 bbox_file = '{}.txt'.format(base_results_path)
             else:
@@ -126,7 +127,7 @@ def run_sequence(seq: Sequence, tracker: Tracker, debug=False, num_gpu=8):
     if _results_exist() and not debug:
         print('FPS: {}'.format(-1))
         return
-
+        
     print('Tracker: {} {} {} ,  Sequence: {}'.format(tracker.name, tracker.parameter_name, tracker.run_id, seq.name))
 
     if debug:
@@ -136,6 +137,7 @@ def run_sequence(seq: Sequence, tracker: Tracker, debug=False, num_gpu=8):
             output = tracker.run_sequence(seq, debug=debug)
         except Exception as e:
             print(e)
+            print(traceback.format_exc())
             return
 
     sys.stdout.flush()

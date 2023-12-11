@@ -69,7 +69,8 @@ def create_default_local_file_ITP_train(workspace_dir, data_dir):
         'hkuis_dir': empty_str,
         'msra10k_dir': empty_str,
         'davis_dir': empty_str,
-        'youtubevos_dir': empty_str})
+        'youtubevos_dir': empty_str,
+        'custom_dir': os.path.join(data_dir, 'custom')})
 
     comment = {'workspace_dir': 'Base directory for saving network checkpoints.',
                'tensorboard_dir': 'Directory for tensorboard files.'}

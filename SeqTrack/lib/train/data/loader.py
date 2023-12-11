@@ -3,6 +3,8 @@ import torch.utils.data.dataloader
 import importlib
 import collections
 # from torch._six import string_classes
+
+
 int_classes = int
 string_classes = str
 from lib.utils import TensorDict, TensorList
@@ -78,8 +80,8 @@ def ltr_collate_stack1(batch):
         if _check_use_shared_memory():
             # If we're in a background process, concatenate directly into a
             # shared memory tensor to avoid an extra copy
-            numel = sum([x.numel() for x in batch])
-            storage = batch[0].storage()._new_shared(numel)
+            numel = sum([x.numel() for x in batch]) * 4
+            storage = batch[0].untyped_storage()._new_shared(numel)
             out = batch[0].new(storage)
             # len(batch)
             # 16
@@ -87,6 +89,8 @@ def ltr_collate_stack1(batch):
             # torch.Size([1, 3, 192, 192])
             # out.shape
             # torch.Size([1769472])
+            # batch[0] [2, 3, 256, 256]
+            # out.shape [3145728]
         return torch.stack(batch, 1, out=out.resize_(0))
             # out.shape
             # torch.Size([1, 16, 3, 192, 192])
@@ -181,7 +185,7 @@ class LTRLoader(torch.utils.data.dataloader.DataLoader):
 
     def __init__(self, name, dataset, training=True, batch_size=1, shuffle=False, sampler=None, batch_sampler=None,
                  num_workers=0, epoch_interval=1, collate_fn=None, stack_dim=0, pin_memory=False, drop_last=False,
-                 timeout=0, worker_init_fn=None):
+                 timeout=0, worker_init_fn=None):      
         if collate_fn is None:
             if stack_dim == 0:
                 collate_fn = ltr_collate

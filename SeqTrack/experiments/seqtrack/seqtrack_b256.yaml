@@ -22,16 +22,19 @@ DATA:
     NUMBER: 2
   TRAIN:
     DATASETS_NAME:
-    - LASOT
-    - GOT10K_vottrain
-    - COCO17
-    - TRACKINGNET
+#    - LASOT
+#    - GOT10K_vottrain
+#    - GOT10K_val
+#    - COCO17
+#    - TRACKINGNET
+    - Custom_dataset
     DATASETS_RATIO:
+    # - 1
+    # - 1
+    # - 1
+    # - 1
     - 1
-    - 1
-    - 1
-    - 1
-    SAMPLE_PER_EPOCH: 60000
+    SAMPLE_PER_EPOCH: 6000
 MODEL:
   ENCODER:
     TYPE: vit_base_patch16
@@ -43,13 +46,13 @@ MODEL:
   FEATURE_TYPE: x
 TRAIN:
   ENCODER_MULTIPLIER: 0.1
-  BATCH_SIZE: 16
+  BATCH_SIZE: 8
   EPOCH: 500
   GRAD_CLIP_NORM: 0.1
   CE_WEIGHT: 1.0
   LR: 0.0001
   LR_DROP_EPOCH: 400
-  NUM_WORKER: 8
+  NUM_WORKER: 4
   OPTIMIZER: ADAMW
   PRINT_INTERVAL: 50
   SCHEDULER:
@@ -68,8 +71,9 @@ TEST:
     VOT20: 1
     VOT21: 1
     VOT22: 1
+    CUSTOM_TEST: 30
   UPDATE_THRESHOLD:
     VOT20: 0.55
     VOT21: 0.55
     VOT22: 0.55
-
+    CUSTOM_TEST: 1.0

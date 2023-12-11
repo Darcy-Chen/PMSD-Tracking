@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data.distributed import DistributedSampler
 # datasets related
-from lib.train.dataset import Lasot, Got10k, MSCOCOSeq, ImagenetVID, TrackingNet, Imagenet1k
+from lib.train.dataset import Lasot, Got10k, MSCOCOSeq, ImagenetVID, TrackingNet, Imagenet1k, CustomDataset
 from lib.train.dataset import Lasot_lmdb, Got10k_lmdb, MSCOCOSeq_lmdb, ImagenetVID_lmdb, TrackingNet_lmdb
 from lib.train.data import sampler, opencv_loader, processing, LTRLoader
 import lib.train.data.transforms as tfm
@@ -28,7 +28,7 @@ def names2datasets(name_list: list, settings, image_loader):
     assert isinstance(name_list, list)
     datasets = []
     for name in name_list:
-        assert name in ["LASOT", "GOT10K_vottrain", "GOT10K_votval", "GOT10K_train_full", "COCO17", "VID", "TRACKINGNET", "IMAGENET1K"]
+        assert name in ["LASOT", "GOT10K_vottrain", "GOT10K_votval", "GOT10K_train_full", "GOT10K_val", "COCO17", "VID", "TRACKINGNET", "IMAGENET1K", "Custom_dataset"]
         if name == "LASOT":
             if settings.use_lmdb:
                 print("Building lasot dataset from lmdb")
@@ -74,6 +74,8 @@ def names2datasets(name_list: list, settings, image_loader):
                 datasets.append(TrackingNet(settings.env.trackingnet_dir, image_loader=image_loader))
         if name == "IMAGENET1K":
             datasets.append(Imagenet1k(settings.env.imagenet1k_dir, image_loader=image_loader))
+        if name == "Custom_dataset":
+            datasets.append(CustomDataset(settings.env.custom_dir, split='train', image_loader=image_loader))
     return datasets
 
 

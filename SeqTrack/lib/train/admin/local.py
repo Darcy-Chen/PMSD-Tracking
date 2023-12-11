@@ -23,3 +23,4 @@ class EnvironmentSettings:
         self.msra10k_dir = ''
         self.davis_dir = ''
         self.youtubevos_dir = ''
+        self.custom_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom'

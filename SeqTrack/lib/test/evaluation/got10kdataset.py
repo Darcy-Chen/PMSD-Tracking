@@ -35,8 +35,7 @@ class GOT10KDataset(BaseDataset):
         ground_truth_rect = load_text(str(anno_path), delimiter=',', dtype=np.float64)
 
         frames_path = '{}/{}'.format(self.base_path, sequence_name)
-        # TODO: REVERT THIS
-        frame_list = [frame for frame in os.listdir(frames_path) if frame.endswith(".png")]
+        frame_list = [frame for frame in os.listdir(frames_path) if frame.endswith(".jpg")]
         frame_list.sort(key=lambda f: int(f[:-4]))
         frames_list = [os.path.join(frames_path, frame) for frame in frame_list]
 

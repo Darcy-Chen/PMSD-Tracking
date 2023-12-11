@@ -103,6 +103,9 @@ class SEQTRACK(BaseTracker):
                                                output_sz=self.params.template_size)
                 template = self.preprocessor.process(z_patch_arr)
                 self.template_list.append(template)
+                print(self.frame_id)
+                print(conf_score)
+                print("update!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
                 if len(self.template_list) > self.num_template:
                     self.template_list.pop(1)
 
