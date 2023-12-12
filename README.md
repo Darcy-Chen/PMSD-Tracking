@@ -40,3 +40,4 @@ The code is tested on Ubuntu 20.04 with RTX 3080 using cuda 11.7 and python 3.8.
 5. If your data has class labels, go to lib/train/data/sampler.py uncomment line 170 to 178 and comment out line 179 to 185
 6. If you images are in jpg, use jpeg4py as the image reader, otherwise use opencv
 7. Modify the parameters in experiment/model.yaml file to change the settings for training/inference
+8. Adjust the SEARCH_FACTOR in model.yaml if you want to limit the size of the search region

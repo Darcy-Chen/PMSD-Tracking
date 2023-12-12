@@ -112,11 +112,11 @@ def save_labeled_image(directory, labels, save_dir):
     print("Done")
 
 
-# dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/test/1/img'
-# save_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/labeled'
-# labels = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/1.txt'
+dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/test/1/img'
+save_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/labeled'
+labels = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/1.txt'
 
-# save_labeled_image(dir, labels, save_dir)
+save_labeled_image(dir, labels, save_dir)
 
 def calculate_IoU(prediction, ground_truth):
     pred = open(prediction, "r")
@@ -145,7 +145,8 @@ def calculate_IoU(prediction, ground_truth):
         intersection_area = (x_right - x_left) * (y_bottom - y_top)
         pred_area = int(pred_box[2]) * int(pred_box[3])
         truth_area = int(truth_box[2]) * int(truth_box[3])
-        iou.append(intersection_area / float(pred_area + truth_area - intersection_area))
+        # iou.append(intersection_area / float(pred_area + truth_area - intersection_area))
+        iou.append(intersection_area / float(truth_area))
 
     pred.close()
     truth.close()
@@ -164,6 +165,6 @@ def calculate_IoU(prediction, ground_truth):
     # b = np.loadtxt('test1.txt', dtype=int)
 
 
-prediction = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256_0/custom/4.txt'
-ground_truth = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/temp_store/4/label/label.txt'
+prediction = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/1.txt'
+ground_truth = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/test/1/label/label.txt'
 calculate_IoU(prediction, ground_truth)
