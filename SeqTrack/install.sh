@@ -94,6 +94,8 @@ pip install yacs
 
 echo ""
 echo ""
+echo "****************** Installing vidaug ******************"
+pip install git+https://github.com/okankop/vidaug.git
 
 
 echo "****************** Installation complete! ******************"

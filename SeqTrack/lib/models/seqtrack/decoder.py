@@ -105,13 +105,13 @@ class SeqTrackDecoder(nn.Module):
             # embedding --> likelihood
             out = vocab_embed(hs.transpose(1, 2)[-1, :, -1, :])
             out = out.softmax(-1)
-
+           
             if i in box_pos:
                 out = out[:, :self.bins] # only include the coordinate values' confidence
 
             if ((i in center_pos) and (window!=None)):
                 out = out * window # window penalty
-
+     
             confidence, token_generated = out.topk(dim=-1, k=1)
             seq = torch.cat([seq, token_generated], dim=-1)
             confidence_list.append(confidence)
@@ -121,8 +121,6 @@ class SeqTrackDecoder(nn.Module):
         out_dict['confidence'] = torch.cat(confidence_list, dim=-1)[:, :]
 
         return out_dict
-
-
 
 
 def generate_square_subsequent_mask(sz):

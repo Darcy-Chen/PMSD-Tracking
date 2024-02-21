@@ -56,6 +56,9 @@ def sample_target(im, target_bb, search_area_factor, output_sz=None):
     y1_pad = max(0, -y1)
     y2_pad = max(y2 - im.shape[0] + 1, 0)
 
+    # print(target_bb)
+    # print(x1, x2, y1, y2)
+
     # Crop target
     im_crop = im[y1 + y1_pad:y2 - y2_pad, x1 + x1_pad:x2 - x2_pad, :]
 

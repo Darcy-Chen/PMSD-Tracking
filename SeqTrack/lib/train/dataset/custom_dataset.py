@@ -61,7 +61,7 @@ class CustomDataset(BaseVideoDataset):
         seq_path = self._get_sequence_path(seq_id)
         label_path = os.path.join(seq_path, 'label')
         bbox = self._read_bb_anno(label_path)
-        valid = (bbox[:, 2] > 0) & (bbox[:, 3] > 0)
+        valid = (bbox[:, 2] > 10) & (bbox[:, 3] > 10)
         visible = valid.clone().byte()
         return {'bbox': bbox, 'mask': None, 'valid': valid, 'visible': visible}
 

@@ -1,7 +1,7 @@
 import os
 # loss function related
 from lib.utils.box_ops import giou_loss
-from torch.nn.functional import l1_loss
+from torch.nn.functional import l1_loss, smooth_l1_loss
 from torch.nn import BCEWithLogitsLoss, MSELoss, CrossEntropyLoss
 # train pipeline related
 from lib.train.trainers import LTRTrainer
@@ -45,7 +45,7 @@ def run(settings):
     # Build dataloaders
     loader_type = getattr(cfg.DATA, "LOADER", "tracking")
     if loader_type == "tracking":
-        loader_train = build_dataloaders(cfg, settings)
+        loader_train, loader_val = build_dataloaders(cfg, settings)
     else:
         raise ValueError("illegal DATA LOADER")
 
@@ -72,8 +72,8 @@ def run(settings):
         weight = torch.ones(bins + 2)
         weight[bins] = 0.01
         weight[bins + 1] = 0.01
-        objective = {'ce': CrossEntropyLoss(weight=weight)}
-        loss_weight = {'ce': cfg.TRAIN.CE_WEIGHT}
+        objective = {'ce': CrossEntropyLoss(weight=weight), 'giou': giou_loss, 'smooth_l1': smooth_l1_loss}
+        loss_weight = {'ce': cfg.TRAIN.CE_WEIGHT, 'giou': cfg.TRAIN.GIOU_WEIGHT, 'smooth_l1': cfg.TRAIN.SMOOTH_L1_WEIGHT}
         actor = SeqTrackActor(net=net, objective=objective, loss_weight=loss_weight, settings=settings, cfg=cfg)
 
     else:
@@ -82,7 +82,7 @@ def run(settings):
     # Optimizer, parameters, and learning rates
     optimizer, lr_scheduler = get_optimizer_scheduler(net, cfg)
     use_amp = getattr(cfg.TRAIN, "AMP", False)
-    trainer = LTRTrainer(actor, [loader_train], optimizer, settings, lr_scheduler, use_amp=use_amp)
+    trainer = LTRTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler, use_amp=use_amp)
 
     # train process
     trainer.train(cfg.TRAIN.EPOCH, load_latest=True, fail_safe=True)

@@ -80,10 +80,8 @@ class SeqTrackActor(BaseActor):
         return outputs, target_seqs
 
     def compute_losses(self, outputs, targets_seq, return_status=True):
-        # Get loss
+        # Get cross entropy loss
         ce_loss = self.objective['ce'](outputs, targets_seq)
-        # weighted sum
-        loss = self.loss_weight['ce'] * ce_loss
 
         outputs = outputs.softmax(-1)
         outputs = outputs[:, :self.BINS]
@@ -93,6 +91,17 @@ class SeqTrackActor(BaseActor):
         boxes_pred = box_cxcywh_to_xyxy(boxes_pred)
         boxes_target = box_cxcywh_to_xyxy(boxes_target)
         iou = box_iou(boxes_pred, boxes_target)[0].mean()
+
+        # Get GIoU loss
+        giou_loss = self.objective['giou'](boxes_pred, boxes_target)
+
+        smooth_l1_loss = self.objective['smooth_l1'](boxes_pred, boxes_target)
+
+        # weighted sum
+        loss = (self.loss_weight['ce'] * ce_loss 
+            + self.loss_weight['giou'] * giou_loss[0]
+            + self.loss_weight['smooth_l1'] * smooth_l1_loss)
+
 
         if return_status:
             # status for log

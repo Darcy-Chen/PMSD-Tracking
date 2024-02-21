@@ -97,7 +97,7 @@ class SEQTRACK(BaseTracker):
 
         # update the template
         if self.num_template > 1:
-            conf_score = out_dict['confidence'].sum().item() * 10 # the confidence score
+            conf_score = out_dict['confidence'].sum().item() * 100 / 4 # the confidence score
             if (self.frame_id % self.update_intervals == 0) and (conf_score > self.update_threshold):
                 z_patch_arr, _ = sample_target(image, self.state, self.params.template_factor,
                                                output_sz=self.params.template_size)
@@ -105,6 +105,7 @@ class SEQTRACK(BaseTracker):
                 self.template_list.append(template)
                 if len(self.template_list) > self.num_template:
                     self.template_list.pop(1)
+                    
 
         # for debug
         if self.debug == 1:

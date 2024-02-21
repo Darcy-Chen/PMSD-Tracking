@@ -10,21 +10,20 @@ import cv2
 def rename_files(img, label):
     for filename in os.listdir(img):
         if filename.endswith(".png"):
-            new_name = filename.replace('c', '')
+            new_name = filename.replace('Img', '')
             old_file = os.path.join(img, filename)
             new_file = os.path.join(img, new_name)
             os.rename(old_file, new_file)
 
     for filename in os.listdir(label):
         if filename.endswith(".png"):
-            new_name = filename.replace('label_vessel', '')
+            new_name = filename.replace('label', '')
             old_file = os.path.join(label, filename)
             new_file = os.path.join(label, new_name)
             os.rename(old_file, new_file)        
 
-
-# img_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/12/img'
-# label_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/12/label'
+# img_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/aug/20/img'
+# label_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/aug/20/label'
 # rename_files(img_dir, label_dir)
 
 def reorder_filename(img, label):
@@ -38,9 +37,26 @@ def reorder_filename(img, label):
         count += 1
         os.rename(old_file, img_name)
 
-# img_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/4/img'
-# label_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/4/label'
+# img_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/val/1/img'
+# label_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/val/1/label'
 # reorder_filename(img_dir, label_dir)
+
+def resize_image(img_dir, label_dir):
+    for filename in os.listdir(img_dir):
+        if filename.endswith(".png"):
+            image = Image.open(os.path.join(img_dir, filename))
+            new_image = image.resize((356, 427))
+            new_image.save(os.path.join(img_dir, filename))
+
+    for filename in os.listdir(label_dir):
+        if filename.endswith(".png"):
+            image = Image.open(os.path.join(label_dir, filename))
+            new_image = image.resize((356, 427))
+            new_image.save(os.path.join(label_dir, filename))      
+
+# img_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/aug/16/img'
+# label_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/aug/16/label'
+# resize_image(img_dir, label_dir)
 
 def draw_circle_bounding_box(img_dir, label_dir):
     frame_list = [frame for frame in os.listdir(label_dir) if frame.endswith(".png")]
@@ -60,11 +76,13 @@ def draw_circle_bounding_box(img_dir, label_dir):
             minr, minc, maxr, maxc = regions[0].bbox
         label_text.writelines([str(max(0, minc)), ',', str(max(0, minr)), ',',
                                str(maxc - minc), ',', str(maxr - minr), '\n'])
+        # else: 
+        #     os.remove(os.path.join(img_dir, frame));                       
     label_text.close()
 
 
-# label_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/4/label'
-# img_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/4/img'
+# label_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/train/14/label'
+# img_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/train/14/img'
 # draw_circle_bounding_box(img_dir, label_dir)
 
 
@@ -91,10 +109,11 @@ def draw_bounding_box(directory, labels):
 
 
 # dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/test/1/img'
-# labels = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/test/1/img/groundtruth.txt'
+# labels = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/test/1/label/label.txt'
 # draw_bounding_box(dir, labels)
 
 def save_labeled_image(directory, labels, save_dir):
+    i = 0
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     frame_list = [frame for frame in os.listdir(directory) if frame.endswith(".png")]
@@ -108,13 +127,18 @@ def save_labeled_image(directory, labels, save_dir):
         end_point = (int(box[0]) + int(box[2]), int(box[1]) + int(box[3]))
         color = (255, 0, 0)
         labeled_image = Image.fromarray(cv2.rectangle(image, start_point, end_point, color, thickness=2), 'RGB')
+        # filename = str(i) + '.png'
         img = labeled_image.save(os.path.join(save_dir, frame))
+        # i += 1
     print("Done")
 
 
-dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/test/1/img'
-save_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/labeled'
-labels = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/1.txt'
+dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/test/4/img'
+save_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/4'
+labels = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/4.txt'
+# dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/aug/24/img'
+# labels = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/aug/24/label/label.txt'
+# save_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/aug/24/groundtruth'
 
 save_labeled_image(dir, labels, save_dir)
 
@@ -145,15 +169,15 @@ def calculate_IoU(prediction, ground_truth):
         intersection_area = (x_right - x_left) * (y_bottom - y_top)
         pred_area = int(pred_box[2]) * int(pred_box[3])
         truth_area = int(truth_box[2]) * int(truth_box[3])
-        # iou.append(intersection_area / float(pred_area + truth_area - intersection_area))
-        iou.append(intersection_area / float(truth_area))
+        iou.append(intersection_area / float(pred_area + truth_area - intersection_area))
+        # iou.append(intersection_area / float(truth_area))
 
     pred.close()
     truth.close()
 
     IoU = np.array(iou)
-    # np.savetxt('/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256_0/custom/IoU.txt',
-    #            IoU, fmt="%f")
+    np.savetxt('/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/IoU.txt',
+               IoU, fmt="%f")
 
     plt.plot(IoU)
     title = "Mean = " + str(np.mean(IoU[IoU > 0])) + ", STD = " + str(np.std(IoU[IoU > 0]))
@@ -165,6 +189,26 @@ def calculate_IoU(prediction, ground_truth):
     # b = np.loadtxt('test1.txt', dtype=int)
 
 
-prediction = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/1.txt'
-ground_truth = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/test/1/label/label.txt'
-calculate_IoU(prediction, ground_truth)
+# prediction = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/1.txt'
+# ground_truth = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/test/1/label/label.txt'
+# calculate_IoU(prediction, ground_truth)
+ 
+
+def convert_masks(img_dir, plague_dir, save_dir):
+    frame_list = [frame for frame in os.listdir(img_dir) if frame.endswith(".png")]
+    frame_list.sort(key=lambda f: int(f[:-4]))
+    for frame in frame_list:
+        img = os.path.join(plague_dir, frame)
+        image = asarray(Image.open(img))
+        image = image * 255
+        labeled_img = Image.fromarray(image)
+        labeled_img.save(os.path.join(save_dir, frame))
+        break
+
+
+
+# img_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/test/5/img'
+# mask_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/test/5/mask'
+# artery_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/test/5/label'
+
+# convert_masks(img_dir, artery_dir, mask_dir)

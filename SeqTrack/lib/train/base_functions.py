@@ -28,7 +28,7 @@ def names2datasets(name_list: list, settings, image_loader):
     assert isinstance(name_list, list)
     datasets = []
     for name in name_list:
-        assert name in ["LASOT", "GOT10K_vottrain", "GOT10K_votval", "GOT10K_train_full", "GOT10K_val", "COCO17", "VID", "TRACKINGNET", "IMAGENET1K", "Custom_dataset"]
+        assert name in ["LASOT", "GOT10K_vottrain", "GOT10K_votval", "GOT10K_train_full", "GOT10K_val", "COCO17", "VID", "TRACKINGNET", "IMAGENET1K", "Custom_dataset", "Custom_val"]
         if name == "LASOT":
             if settings.use_lmdb:
                 print("Building lasot dataset from lmdb")
@@ -76,6 +76,8 @@ def names2datasets(name_list: list, settings, image_loader):
             datasets.append(Imagenet1k(settings.env.imagenet1k_dir, image_loader=image_loader))
         if name == "Custom_dataset":
             datasets.append(CustomDataset(settings.env.custom_dir, split='train', image_loader=image_loader))
+        if name == "Custom_val":
+            datasets.append(CustomDataset(settings.env.custom_dir, split='val', image_loader=image_loader))
     return datasets
 
 
@@ -113,6 +115,13 @@ def build_dataloaders(cfg, settings):
                                             num_template_frames=settings.num_template, processing=data_processing_train,
                                             frame_sample_mode=sampler_mode
                                             )
+    dataset_val = sampler.TrackingSampler(datasets=names2datasets(cfg.DATA.VAL.DATASETS_NAME, settings, opencv_loader),
+                                            p_datasets=cfg.DATA.VAL.DATASETS_RATIO,
+                                            samples_per_epoch=cfg.DATA.VAL.SAMPLE_PER_EPOCH,
+                                            max_gap=cfg.DATA.MAX_SAMPLE_INTERVAL, num_search_frames=settings.num_search,
+                                            num_template_frames=settings.num_template, processing=data_processing_train,
+                                            frame_sample_mode=sampler_mode
+                                            )
 
     train_sampler = DistributedSampler(dataset_train) if settings.local_rank != -1 else None
     shuffle = False if settings.local_rank != -1 else True
@@ -120,7 +129,10 @@ def build_dataloaders(cfg, settings):
     loader_train = LTRLoader('train', dataset_train, training=True, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=shuffle,
                              num_workers=cfg.TRAIN.NUM_WORKER, drop_last=True, stack_dim=1, sampler=train_sampler)
 
-    return loader_train
+    loader_val = LTRLoader('val', dataset_val, training=False, batch_size=cfg.TRAIN.BATCH_SIZE, shuffle=shuffle,
+                           num_workers=cfg.TRAIN.NUM_WORKER, drop_last=True, stack_dim=1, sampler=train_sampler)
+
+    return loader_train, loader_val
 
 
 def get_optimizer_scheduler(net, cfg):

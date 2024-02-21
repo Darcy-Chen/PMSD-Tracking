@@ -37,7 +37,9 @@ cfg.TRAIN.OPTIMIZER = "ADAMW"
 cfg.TRAIN.ENCODER_MULTIPLIER = 0.1  # encoder's LR = this factor * LR
 cfg.TRAIN.FREEZE_ENCODER = False # for freezing the parameters of encoder
 cfg.TRAIN.ENCODER_OPEN = [] # only for debug, open some layers of encoder when FREEZE_ENCODER is True
-cfg.TRAIN.CE_WEIGHT = 1.0 # weight for cross-entropy loss
+cfg.TRAIN.CE_WEIGHT = 0.4 # weight for cross-entropy loss
+cfg.TRAIN.GIOU_WEIGHT = 0.4 # weight for GIoU loss
+cfg.TRAIN.SMOOTH_L1_WEIGHT = 0.2 # weight for GIoU loss
 cfg.TRAIN.PRINT_INTERVAL = 50 # interval to print the training log
 cfg.TRAIN.GRAD_CLIP_NORM = 0.1
 # TRAIN.SCHEDULER
@@ -58,6 +60,11 @@ cfg.DATA.TRAIN = edict()
 cfg.DATA.TRAIN.DATASETS_NAME = ["LASOT", "GOT10K_vottrain"]
 cfg.DATA.TRAIN.DATASETS_RATIO = [1, 1]
 cfg.DATA.TRAIN.SAMPLE_PER_EPOCH = 60000
+# DATA.VAL
+cfg.DATA.VAL = edict()
+cfg.DATA.VAL.DATASETS_NAME = ["GOT10K_votval"]
+cfg.DATA.VAL.DATASETS_RATIO = [1]
+cfg.DATA.VAL.SAMPLE_PER_EPOCH = 1000
 # DATA.SEARCH
 cfg.DATA.SEARCH = edict()
 cfg.DATA.SEARCH.NUMBER = 1  #number of search region, only support 1 for now.
