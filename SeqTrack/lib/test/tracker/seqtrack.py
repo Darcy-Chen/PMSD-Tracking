@@ -13,6 +13,7 @@ class SEQTRACK(BaseTracker):
     def __init__(self, params, dataset_name):
         super(SEQTRACK, self).__init__(params)
         network = build_seqtrack(params.cfg)
+        # TODO: do not load weights for decoder and use xavier initialization
         network.load_state_dict(torch.load(self.params.checkpoint, map_location='cpu')['net'], strict=True)
         self.cfg = params.cfg
         self.seq_format = self.cfg.DATA.SEQ_FORMAT

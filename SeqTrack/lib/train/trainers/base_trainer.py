@@ -199,15 +199,21 @@ class BaseTrainer:
         if ignore_fields is None:
             ignore_fields = ['settings']
 
-            # Never load the scheduler. It exists in older checkpoints.
+        # Never load the scheduler. It exists in older checkpoints.
         ignore_fields.extend(['lr_scheduler', 'constructor', 'net_type', 'actor_type', 'net_info'])
 
-        # Load all fields
+        # Load only encoder weights
         for key in fields:
             if key in ignore_fields:
                 continue
             if key == 'net':
-                net.load_state_dict(checkpoint_dict[key])
+                encoder_dict = {k: v for k, v in checkpoint_dict[key].items() if 'encoder' in k}
+                # decoder_dict = {k: v for k, v in checkpoint_dict[key].items() if 'decoder' in k}
+
+                net_dict = net.state_dict()
+                net_dict.update(encoder_dict)  # Load only the encoder weights
+                net.load_state_dict(net_dict)
+
             elif key == 'optimizer':
                 self.optimizer.load_state_dict(checkpoint_dict[key])
             else:

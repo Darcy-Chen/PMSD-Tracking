@@ -10,6 +10,7 @@ from lib.utils.misc import NestedTensor
 
 from lib.models.seqtrack.encoder import build_encoder
 from .decoder import build_decoder
+from .decoder_xl import build_decoderXL
 from lib.utils.box_ops import box_xyxy_to_cxcywh
 from lib.utils.pos_embed import get_sinusoid_encoding_table, get_2d_sincos_pos_embed
 
@@ -144,7 +145,7 @@ class MLP(nn.Module):
 
 def build_seqtrack(cfg):
     encoder = build_encoder(cfg)
-    decoder = build_decoder(cfg)
+    decoder = build_decoderXL(cfg)
     model = SEQTRACK(
         encoder,
         decoder,
