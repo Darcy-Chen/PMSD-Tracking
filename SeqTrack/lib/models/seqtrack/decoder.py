@@ -72,7 +72,7 @@ class SeqTrackDecoder(nn.Module):
         query_embed = self.embedding.position_embeddings.weight.unsqueeze(1)
         query_embed = query_embed.repeat(1, bs, 1)
 
-        memory = src
+        memory = src # the memory refers to the input image
 
         tgt_mask = generate_square_subsequent_mask(len(tgt)).to(tgt.device) #generate the causal mask
 
@@ -208,16 +208,15 @@ class TransformerDecoderLayer(nn.Module):
                      memory_key_padding_mask: Optional[Tensor] = None,
                      pos: Optional[Tensor] = None,
                      query_pos: Optional[Tensor] = None):
-        q = k = self.with_pos_embed(tgt, query_pos) # query and key are the same
-        # q: query, k: key, tgt: value
+        q = k = self.with_pos_embed(tgt, query_pos)
         tgt2 = self.self_attn(q, k, tgt, attn_mask=tgt_mask,
-                              key_padding_mask=tgt_key_padding_mask)[0] # self-attention
+                              key_padding_mask=tgt_key_padding_mask)[0]
         tgt = tgt + self.dropout1(tgt2)
         tgt = self.norm1(tgt)
         tgt2 = self.multihead_attn(self.with_pos_embed(tgt, query_pos),
                                    self.with_pos_embed(memory, pos),
                                    memory, attn_mask=memory_mask,
-                                   key_padding_mask=memory_key_padding_mask)[0] # cross-attention
+                                   key_padding_mask=memory_key_padding_mask)[0]
 
         tgt = tgt + self.dropout2(tgt2)
         tgt = self.norm2(tgt)

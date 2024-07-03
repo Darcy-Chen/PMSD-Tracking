@@ -18,7 +18,7 @@ from lib.utils.pos_embed import get_sinusoid_encoding_table, get_2d_sincos_pos_e
 class SEQTRACK(nn.Module):
     """ This is the base class for SeqTrack """
     def __init__(self, encoder, decoder, hidden_dim,
-                 bins=1000, feature_type='x', num_frames=1, num_template=1):
+                 bins=1000, feature_type='x', num_frames=1, num_template=1, attn_type=0, mem_len=0):
         """ Initializes the model.
         Parameters:
             encoder: torch module of the encoder to be used. See encoder.py
@@ -38,6 +38,7 @@ class SEQTRACK(nn.Module):
         self.num_frames = num_frames
         self.num_template = num_template
         self.feature_type = feature_type
+        self.attn_type = attn_type
 
         # Different type of visual features for decoder.
         # Since we only use one search image for now, the 'x' is same with 'x_last' here.
@@ -96,8 +97,13 @@ class SEQTRACK(nn.Module):
             dec_mem = self.bottleneck(dec_mem)  #[B,NL,D]
         dec_mem = dec_mem.permute(1,0,2)  #[NL,B,D]
 
-        out = self.decoder(dec_mem, self.pos_embed.permute(1,0,2).expand(-1,B,-1), sequence)
-        out = self.vocab_embed(out) # embeddings --> likelihood of words
+        if self.attn_type == 0:
+            out = self.decoder(dec_mem, self.pos_embed.permute(1,0,2).expand(-1,B,-1), sequence)
+            out = self.vocab_embed(out) # embeddings --> likelihood of words
+        # TODO: implement the second attention type, this output is NAN please check again
+        elif self.attn_type == 1:
+            out = self.decoder(dec_mem, self.pos_embed.permute(1,0,2).expand(-1,B,-1), sequence)
+            out = self.vocab_embed(out)    
 
         return out
 
@@ -119,8 +125,12 @@ class SEQTRACK(nn.Module):
         if dec_mem.shape[-1] != self.hidden_dim:
             dec_mem = self.bottleneck(dec_mem)  #[B,NL,D]
         dec_mem = dec_mem.permute(1,0,2)  #[NL,B,D]
-
-        out = self.decoder.inference(dec_mem,
+        if self.attn_type == 0:
+            out = self.decoder.inference(dec_mem,
+                                    self.pos_embed.permute(1,0,2).expand(-1,B,-1),
+                                    sequence, self.vocab_embed)
+        elif self.attn_type == 1:
+            out = self.decoder.inference(dec_mem,
                                     self.pos_embed.permute(1,0,2).expand(-1,B,-1),
                                     sequence, self.vocab_embed,
                                     window, seq_format)
@@ -153,7 +163,8 @@ def build_seqtrack(cfg):
         bins = cfg.MODEL.BINS,
         feature_type = cfg.MODEL.FEATURE_TYPE,
         num_frames = cfg.DATA.SEARCH.NUMBER,
-        num_template = cfg.DATA.TEMPLATE.NUMBER
+        num_template = cfg.DATA.TEMPLATE.NUMBER,
+        attn_type = cfg.MODEL.DECODER.ATTN_TYPE,
     )
 
     return model

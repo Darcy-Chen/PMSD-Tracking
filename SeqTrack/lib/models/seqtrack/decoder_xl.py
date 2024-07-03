@@ -34,14 +34,13 @@ class DecoderEmbeddings(nn.Module):
 
         return embeddings
 
-
 class SeqTrackDecoderXL(nn.Module):
 
     def __init__(self, d_model=512, nhead=8,
                  num_decoder_layers=6, dim_feedforward=2048, dropout=0.1,
                  activation="relu", normalize_before=False, attn_type=0,
                  return_intermediate_dec=False, bins=1000, num_frames=9,
-                 tgt_len=4, mem_len=0):
+                 tgt_len=5, mem_len=0, ext_len=0):
         super().__init__()
         self.bins = bins
         self.num_frames = num_frames
@@ -60,7 +59,7 @@ class SeqTrackDecoderXL(nn.Module):
                                                     dropout, activation, normalize_before)
         decoder_norm = nn.LayerNorm(d_model)
         self.body = TransformerDecoderXL(decoder_layer, num_decoder_layers, decoder_norm,
-                                          return_intermediate=return_intermediate_dec)
+                                          return_intermediate=return_intermediate_dec, attn_type=attn_type)
 
         self._reset_parameters()
 
@@ -70,7 +69,8 @@ class SeqTrackDecoderXL(nn.Module):
         
         self.tgt_len = tgt_len # target length
         self.mem_len = mem_len # memory length
-        self.max_klen = tgt_len + mem_len # maximum key length
+        self.ext_len = ext_len # extended length
+        self.max_klen = tgt_len + mem_len + ext_len # maximum key length
 
         self.attn_type = attn_type # attention type
         self._create_params() # create parameters for bias
@@ -106,8 +106,11 @@ class SeqTrackDecoderXL(nn.Module):
         # does not deal with None
         if mems is None: return None
 
+        print("Length of hids: ", len(hids))
+        print("Length of mems: ", len(mems))
+
         # mems is not None
-        assert len(hids) == len(mems), 'len(hids) != len(mems)'
+        # assert len(hids) == len(mems), 'len(hids) != len(mems)'
 
         # There are `mlen + qlen` steps that can be cached into mems
         # For the next step, the last `ext_len` of the `qlen` tokens
@@ -125,59 +128,27 @@ class SeqTrackDecoderXL(nn.Module):
 
         return new_mems
 
-    # TODO: rewrite this function to match the parameters of the decoder
-    def _forward(self, src, dec_inp, mems=None):
-        # Chnage the layers to the new decoder layers
-        bsz, qlen = dec_inp.size() # batch size, query length
 
-        tgt = self.embedding(dec_inp).permute(1, 0, 2)  # word embedding
+    def _forward(self, src, seq, pos_embed, mems=None):
+        # Chnage the layers to the new decoder layers
+        bsz, qlen = seq.size() # batch size, query length
+
+        tgt = self.embedding(seq).permute(1, 0, 2)  # word embedding
+        print("SeqDec forward Tgt shape: ", tgt.shape)
 
         mlen = mems[0].size(0) if mems is not None else 0   # memory length
         klen = mlen + qlen # key length
-        # if self.same_length:
-        all_ones = tgt.new_ones(qlen, klen)
-        mask_len = klen - self.mem_len
-        if mask_len > 0:
-            mask_shift_len = qlen - mask_len
-        else:
-            mask_shift_len = qlen
-        dec_attn_mask = (torch.triu(all_ones, 1+mlen)
-                + torch.tril(all_ones, -mask_shift_len)).byte()[:, :, None] # -1
+        dec_attn_mask = torch.triu(
+                tgt.new_ones(qlen, klen), diagonal=1+mlen).byte()[:,:,None]
       
-        # relative positional encoding
-        pos_seq = torch.arange(klen-1, -1, -1.0, device=tgt.device, 
-                                dtype=tgt.dtype)
-
-        # if self.clamp_len > 0:
-        #     pos_seq.clamp_(max=self.clamp_len)
-
-        # TODO; add positional encoding
-        pos_embed = self.embedding.position_embeddings(pos_seq)
+        # TODO; add positional encodings
         query_embed = self.embedding.position_embeddings.weight.unsqueeze(1)
         query_embed = query_embed.repeat(1, bsz, 1)
 
         memory = src
 
-        tgt_mask = generate_square_subsequent_mask(len(tgt)).to(tgt.device) #generate the causal mask
-
-        hs = self.body(tgt, memory, r_w_bias=self.r_w_bias, r_r_bias=self.r_r_bias, pos=pos_embed, query_pos=query_embed[:len(pos_seq)],
-                       tgt_mask=tgt_mask, memory_mask=None)
-        
-        # # TODO: replace this with Seqtrack fwd and think about how to predict the bounding box without the bins
-        # core_out = self.drop(word_emb)
-        # pos_emb = self.drop(query_emb)
-
-        # hids.append(core_out) # append the output of the decoder
-        # for i, layer in enumerate(self.layers):
-        #     mems_i = None if mems is None else mems[i]
-        #     # core_out is dec_inp, pos_emb is r (relative positional encoding)
-        #     # r_w_bias is u (global content bias), r_r_bias is v (global position bias)
-        #     core_out = layer(core_out, pos_emb, self.r_w_bias,
-        #             self.r_r_bias, dec_attn_mask=dec_attn_mask, mems=mems_i) 
-        #     hids.append(core_out) # append the output of the decoder
-
-        # core_out = self.drop(core_out)
-
+        hs = self.body(tgt=tgt, memory=memory, r_w_bias=self.r_w_bias, r_r_bias=self.r_r_bias, pos=pos_embed, query_pos=query_embed[:len(tgt)],
+                       tgt_mask=dec_attn_mask, memory_mask=None, mems=mems)
         new_mems = self._update_mems(hs, mems, mlen, qlen)
 
         return hs, new_mems    
@@ -188,11 +159,11 @@ class SeqTrackDecoderXL(nn.Module):
 
         # flatten NxCxHxW to HWxNxC
         n, bs, c = src.shape
+        new_mems = None
     
         # TODO: add relative positional encoding
         if self.attn_type == 1:
-            hs, new_mems = self._forward(src, seq, mems=mems) # hidden is the output of the decoder, new_mems is the updated memory
-
+            hs, new_mems = self._forward(src, seq, pos_embed, mems=mems) # hidden is the output of the decoder, new_mems is the updated memory
         else:    
             tgt = self.embedding(seq).permute(1, 0, 2) 
             query_embed = self.embedding.position_embeddings.weight.unsqueeze(1)
@@ -206,6 +177,11 @@ class SeqTrackDecoderXL(nn.Module):
             hs = self.body(tgt, memory, pos=pos_embed, query_pos=query_embed[:len(tgt)],
                         tgt_mask=tgt_mask, memory_mask=None) # pass the target, memory, and positional embedding to the decoder
 
+        print("SeqDec forward hs: ", hs)
+        print("SeqDec forward new_mems: ", new_mems)
+
+        if new_mems is not None:
+            return hs, new_mems
         return hs.transpose(1, 2)
 
 
@@ -264,12 +240,13 @@ def generate_square_subsequent_mask(sz):
 
 class TransformerDecoderXL(nn.Module):
 
-    def __init__(self, decoder_layer, num_layers, norm=None, return_intermediate=False):
+    def __init__(self, decoder_layer, num_layers, norm=None, return_intermediate=False, attn_type=0):
         super().__init__()
         self.layers = _get_clones(decoder_layer, num_layers)
         self.num_layers = num_layers
         self.norm = norm
         self.return_intermediate = return_intermediate
+        self.attn_type = attn_type
 
     def forward(self, tgt, memory,
                 tgt_mask: Optional[Tensor] = None,
@@ -277,18 +254,36 @@ class TransformerDecoderXL(nn.Module):
                 tgt_key_padding_mask: Optional[Tensor] = None,
                 memory_key_padding_mask: Optional[Tensor] = None,
                 pos: Optional[Tensor] = None,
-                query_pos: Optional[Tensor] = None):
+                query_pos: Optional[Tensor] = None, 
+                r_w_bias: Optional[Tensor] = None,
+                r_r_bias: Optional[Tensor] = None,
+                mems = None):
         output = tgt
 
         intermediate = []
 
-        for layer in self.layers:
-            output = layer(output, memory, tgt_mask=tgt_mask,
-                           memory_mask=memory_mask,
-                           tgt_key_padding_mask=tgt_key_padding_mask,
-                           memory_key_padding_mask=memory_key_padding_mask,
-                           pos=pos, query_pos=query_pos)
+        if self.attn_type == 0:
+            for layer in self.layers:
+                output = layer(output, memory, tgt_mask=tgt_mask,
+                               memory_mask=memory_mask,
+                               tgt_key_padding_mask=tgt_key_padding_mask,
+                               memory_key_padding_mask=memory_key_padding_mask,
+                               pos=pos, query_pos=query_pos)
 
+                if self.return_intermediate:
+                    intermediate.append(self.norm(output))
+        elif self.attn_type == 1:
+            index = 0 # index for the memory
+            for layer in self.layers:
+                mem_i = mems[index] if mems is not None else None
+                output = layer(output, memory, tgt_mask=tgt_mask,
+                            memory_mask=memory_mask,
+                            tgt_key_padding_mask=tgt_key_padding_mask,
+                            memory_key_padding_mask=memory_key_padding_mask,
+                            pos=pos, query_pos=query_pos, 
+                            r_w_bias=r_w_bias[index], r_r_bias=r_r_bias[index], mems=mem_i)
+                print("Decoder XL output shape: ", output.shape, "for layer ", index)
+                index += 1
             if self.return_intermediate:
                 intermediate.append(self.norm(output))
 
@@ -469,7 +464,6 @@ class RelPartialLearnableMultiHeadAttn(RelMultiHeadAttn):
     # w: query, r: relative positional encoding, r_w_bias: global content bias, r_r_bias: global position bias
     def forward(self, w, r, r_w_bias, r_r_bias, attn_mask=None, mems=None):
         qlen, rlen, bsz = w.size(0), r.size(0), w.size(1)
-
         if mems is not None:
             cat = torch.cat([mems, w], 0)
             if self.pre_lnorm:
@@ -495,7 +489,9 @@ class RelPartialLearnableMultiHeadAttn(RelMultiHeadAttn):
         w_head_k = w_head_k.view(klen, bsz, self.n_head, self.d_head)           # qlen x bsz x n_head x d_head
         w_head_v = w_head_v.view(klen, bsz, self.n_head, self.d_head)           # qlen x bsz x n_head x d_head
 
-        r_head_k = r_head_k.view(rlen, self.n_head, self.d_head)                # qlen x n_head x d_head
+        # This is the same across all batches
+        r_head_k = r_head_k.view(rlen, bsz, self.n_head, self.d_head)                # qlen x n_head x d_head
+        r_head_k = r_head_k[:, 0, :, :]
 
         #### compute attention score
         rw_head_q = w_head_q + r_w_bias                                         # qlen x bsz x n_head x d_head
@@ -568,14 +564,14 @@ class RelPartialLearnableDecoderLayer(nn.Module):
         return tensor if pos is None else tensor + pos
 
     # tgt: value, memory: encoder value, mems: decoder memory, r_w_bias: global content bias, r_r_bias: global position bias
-    def forward(self, tgt, memory, tgt_mask: Optional[Tensor] = None, mems: Optional[Tensor] = None, r_w_bias: Optional[Tensor] = None, r_r_bias: Optional[Tensor] = None,
+    def forward(self, tgt, memory, r_w_bias, r_r_bias, tgt_mask: Optional[Tensor] = None, mems=None, 
                      memory_mask: Optional[Tensor] = None, tgt_key_padding_mask: Optional[Tensor] = None,
                      memory_key_padding_mask: Optional[Tensor] = None, pos: Optional[Tensor] = None,
                      query_pos: Optional[Tensor] = None, partial_query: Optional[Tensor] = None):
-        # TODO: replace this with relative embedding
-        q = self.with_pos_embed(tgt, query_pos) # query and key are the same         
-        # TODO: adjust paramters for partial learnable multihead attention
-        tgt2 = self.self_attn(q, r, r_w_bias, r_r_bias, attn_mask=tgt_mask, mems=mems)
+        print("I am the new decoder layer!!!!!!!!!!!!!!")
+        print("Tgt shape: ", tgt.shape)
+        # TODO: replace this with relative embeddings
+        tgt2 = self.self_attn(tgt, query_pos, r_w_bias, r_r_bias, attn_mask=tgt_mask, mems=mems)
         tgt = tgt + self.dropout1(tgt2)
         tgt = self.norm1(tgt)
         tgt2 = self.multihead_attn(self.with_pos_embed(tgt, query_pos), self.with_pos_embed(memory, pos),
@@ -584,6 +580,8 @@ class RelPartialLearnableDecoderLayer(nn.Module):
         tgt2 = self.linear2(self.dropout(self.activation(self.linear1(tgt))))
         tgt = tgt + self.dropout3(tgt2)
         tgt = self.norm3(tgt)
+        
+        return tgt
 
 def _get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
@@ -601,7 +599,7 @@ def build_decoderXL(cfg):
         bins=cfg.MODEL.BINS,
         num_frames=cfg.DATA.SEARCH.NUMBER,
         attn_type=cfg.MODEL.DECODER.ATTN_TYPE,
-        tgt_len=4,
+        tgt_len=5,
         mem_len=cfg.MODEL.DECODER.MEM_LEN
     )
 
