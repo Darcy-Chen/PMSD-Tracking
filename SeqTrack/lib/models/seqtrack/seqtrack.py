@@ -102,10 +102,10 @@ class SEQTRACK(nn.Module):
             out = self.vocab_embed(out) # embeddings --> likelihood of words
         # TODO: implement the second attention type, this output is NAN please check again
         elif self.attn_type == 1:
-            out = self.decoder(dec_mem, self.pos_embed.permute(1,0,2).expand(-1,B,-1), sequence)
-            out = self.vocab_embed(out)    
-
-        return out
+            out, mems = self.decoder(dec_mem, self.pos_embed.permute(1,0,2).expand(-1,B,-1), sequence)
+            out = self.vocab_embed(out) 
+            mems = [self.vocab_embed(mem) for mem in mems]   
+        return out, mems
 
     def inference_decoder(self, xz, sequence, window=None, seq_format='xywh'):
         # Forward the decoder

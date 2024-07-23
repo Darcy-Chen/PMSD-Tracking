@@ -24,7 +24,7 @@ class SeqTrackActor(BaseActor):
             status  -  dict containing detailed losses
         """
         # forward pass
-        outputs, target_seqs = self.forward_pass(data)
+        outputs, target_seqs, new_mem = self.forward_pass(data)
 
         # compute losses
         loss, status = self.compute_losses(outputs, target_seqs)
@@ -40,6 +40,7 @@ class SeqTrackActor(BaseActor):
         feature_xz = self.net(images_list=template_list+search_list, mode='encoder') # forward the encoder
 
         bins = self.BINS # coorinate token
+        # TODO: delete the start token
         start = bins + 1 # START token
         end = bins # End token
         len_embedding = bins + 2 # number of embeddings, including the coordinate tokens and the special tokens
@@ -73,11 +74,13 @@ class SeqTrackActor(BaseActor):
         target_seqs = target_seqs.flatten()
         target_seqs = target_seqs.type(dtype=torch.int64)
 
-        outputs = self.net(xz=feature_xz, seq=input_seqs, mode="decoder")
+        outputs, new_mem = self.net(xz=feature_xz, seq=input_seqs, mode="decoder")
+        print("Outputs shape: ", len(outputs), outputs[0].shape)
 
         outputs = outputs[-1].reshape(-1, len_embedding)
+        new_mem = new_mem[-1].reshape(-1, len_embedding)
 
-        return outputs, target_seqs
+        return outputs, target_seqs, new_mem
 
     def compute_losses(self, outputs, targets_seq, return_status=True):
         # Get cross entropy loss

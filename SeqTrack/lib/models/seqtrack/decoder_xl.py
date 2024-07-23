@@ -40,12 +40,13 @@ class SeqTrackDecoderXL(nn.Module):
                  num_decoder_layers=6, dim_feedforward=2048, dropout=0.1,
                  activation="relu", normalize_before=False, attn_type=0,
                  return_intermediate_dec=False, bins=1000, num_frames=9,
-                 tgt_len=5, mem_len=0, ext_len=0):
+                 tgt_len=4, mem_len=0, ext_len=0):
         super().__init__()
         self.bins = bins
         self.num_frames = num_frames
         self.n_layer = num_decoder_layers
         self.num_coordinates = 4 # [x,y,w,h]
+        # TODO: delete the start token
         max_position_embeddings = (self.num_coordinates+1) * num_frames
         self.embedding = DecoderEmbeddings(bins+2, d_model, max_position_embeddings, dropout)
         
@@ -59,7 +60,8 @@ class SeqTrackDecoderXL(nn.Module):
                                                     dropout, activation, normalize_before)
         decoder_norm = nn.LayerNorm(d_model)
         self.body = TransformerDecoderXL(decoder_layer, num_decoder_layers, decoder_norm,
-                                          return_intermediate=return_intermediate_dec, attn_type=attn_type)
+                                          return_intermediate=return_intermediate_dec, 
+                                          attn_type=attn_type, ext_len=ext_len, mem_len=mem_len)
 
         self._reset_parameters()
 
@@ -74,6 +76,19 @@ class SeqTrackDecoderXL(nn.Module):
 
         self.attn_type = attn_type # attention type
         self._create_params() # create parameters for bias
+    
+    def init_mems(self):
+        if self.mem_len > 0:
+            mems = []
+            param = next(self.parameters())
+            for i in range(self.n_layer+1):
+                empty = torch.empty(0, dtype=param.dtype, device=param.device)
+                mems.append(empty)
+
+            return mems
+        else:
+            return None
+
 
     def _create_params(self):
         if self.attn_type == 1: # partial learnable attention (relative)
@@ -90,98 +105,45 @@ class SeqTrackDecoderXL(nn.Module):
         self.mem_len = mem_len
         self.ext_len = ext_len
 
-    def init_mems(self):
-        if self.mem_len > 0:
-            mems = []
-            param = next(self.parameters())
-            for i in range(self.n_layer+1):
-                empty = torch.empty(0, dtype=param.dtype, device=param.device)
-                mems.append(empty)
-
-            return mems
-        else:
-            return None
-
-    def _update_mems(self, hids, mems, qlen, mlen):
-        # does not deal with None
-        if mems is None: return None
-
-        print("Length of hids: ", len(hids))
-        print("Length of mems: ", len(mems))
-
-        # mems is not None
-        # assert len(hids) == len(mems), 'len(hids) != len(mems)'
-
-        # There are `mlen + qlen` steps that can be cached into mems
-        # For the next step, the last `ext_len` of the `qlen` tokens
-        # will be used as the extended context. Hence, we only cache
-        # the tokens from `mlen + qlen - self.ext_len - self.mem_len`
-        # to `mlen + qlen - self.ext_len`.
-        with torch.no_grad():
-            new_mems = []
-            end_idx = mlen + max(0, qlen - 0 - self.ext_len)
-            beg_idx = max(0, end_idx - self.mem_len)
-            for i in range(len(hids)):
-
-                cat = torch.cat([mems[i], hids[i]], dim=0)
-                new_mems.append(cat[beg_idx:end_idx].detach())
-
-        return new_mems
-
-
-    def _forward(self, src, seq, pos_embed, mems=None):
-        # Chnage the layers to the new decoder layers
+    # src: encoder output, pos_embed: positional embedding, seq: target sequence
+    def forward(self, src, pos_embed, seq, *mems):
+        print("Seq shape: ", seq.shape)
+        # flatten NxCxHxW to HWxNxC
         bsz, qlen = seq.size() # batch size, query length
+        print("Query length: ", qlen)
+        print("Batch size: ", bsz)
 
-        tgt = self.embedding(seq).permute(1, 0, 2)  # word embedding
-        print("SeqDec forward Tgt shape: ", tgt.shape)
+        if not mems: 
+            mems = self.init_mems()
+            print("Mems initialized: ", len(mems))
+    
+        tgt = self.embedding(seq).permute(1, 0, 2)
+        memory = src # the memory refers to the input image
 
-        mlen = mems[0].size(0) if mems is not None else 0   # memory length
-        klen = mlen + qlen # key length
-        dec_attn_mask = torch.triu(
-                tgt.new_ones(qlen, klen), diagonal=1+mlen).byte()[:,:,None]
-      
-        # TODO; add positional encodings
         query_embed = self.embedding.position_embeddings.weight.unsqueeze(1)
         query_embed = query_embed.repeat(1, bsz, 1)
 
-        memory = src
+        mlen = mems[0].size(0) if mems is not None else 0   # memory length
+        klen = mlen + qlen # key length
+        tgt_mask = generate_square_subsequent_mask(len(tgt)).to(tgt.device) #generate the causal mask
+        print("Tgt mask shape: ", tgt_mask.shape)
+        dec_attn_mask = torch.triu(
+            tgt.new_ones(qlen, klen), diagonal=1+mlen).byte()[:,:,None] # upper triangular matrix
+        print("Dec attn mask shape: ", dec_attn_mask.shape)
 
-        hs = self.body(tgt=tgt, memory=memory, r_w_bias=self.r_w_bias, r_r_bias=self.r_r_bias, pos=pos_embed, query_pos=query_embed[:len(tgt)],
-                       tgt_mask=dec_attn_mask, memory_mask=None, mems=mems)
-        new_mems = self._update_mems(hs, mems, mlen, qlen)
 
-        return hs, new_mems    
-
-    # src: encoder output, pos_embed: positional embedding, seq: target sequence
-    def forward(self, src, pos_embed, seq, *mems):
-        if not mems: mems = self.init_mems()
-
-        # flatten NxCxHxW to HWxNxC
-        n, bs, c = src.shape
-        new_mems = None
-    
-        # TODO: add relative positional encoding
         if self.attn_type == 1:
-            hs, new_mems = self._forward(src, seq, pos_embed, mems=mems) # hidden is the output of the decoder, new_mems is the updated memory
-        else:    
-            tgt = self.embedding(seq).permute(1, 0, 2) 
-            query_embed = self.embedding.position_embeddings.weight.unsqueeze(1)
-            query_embed = query_embed.repeat(1, bs, 1)
-
-            memory = src
-
+            hs, new_mems = self.body(tgt=tgt, memory=memory, r_w_bias=self.r_w_bias, r_r_bias=self.r_r_bias, pos=pos_embed, query_pos=query_embed[:len(tgt)],
+                tgt_mask=dec_attn_mask, memory_mask=None, mems=mems)
+            return hs.transpose(1, 2), new_mems
+        else:     
             tgt_mask = generate_square_subsequent_mask(len(tgt)).to(tgt.device) #generate the causal mask
+            print("Tgt mask shape: ", tgt_mask.shape)
 
             # hs is the output of the decoder
             hs = self.body(tgt, memory, pos=pos_embed, query_pos=query_embed[:len(tgt)],
                         tgt_mask=tgt_mask, memory_mask=None) # pass the target, memory, and positional embedding to the decoder
 
-        print("SeqDec forward hs: ", hs)
-        print("SeqDec forward new_mems: ", new_mems)
-
-        if new_mems is not None:
-            return hs, new_mems
         return hs.transpose(1, 2)
 
 
@@ -221,7 +183,8 @@ class SeqTrackDecoderXL(nn.Module):
             confidence_list.append(confidence)
 
         out_dict = {}
-        out_dict['pred_boxes'] = seq[:, -self.num_coordinates:] # Discard the START token, only get the bounding box
+        # TIDO: delete the start token
+        out_dict['pred_boxes'] = seq[:, -self.num_coordinates:]
         out_dict['confidence'] = torch.cat(confidence_list, dim=-1)[:, :]
 
         return out_dict
@@ -240,13 +203,45 @@ def generate_square_subsequent_mask(sz):
 
 class TransformerDecoderXL(nn.Module):
 
-    def __init__(self, decoder_layer, num_layers, norm=None, return_intermediate=False, attn_type=0):
+    def __init__(self, decoder_layer, num_layers, norm=None, return_intermediate=False, attn_type=0, ext_len=0, mem_len=0):
         super().__init__()
         self.layers = _get_clones(decoder_layer, num_layers)
         self.num_layers = num_layers
         self.norm = norm
         self.return_intermediate = return_intermediate
         self.attn_type = attn_type
+        self.mem_len = mem_len # memory length
+        self.ext_len = ext_len # extended length
+
+    def _update_mems(self, hids, mems, qlen, mlen):
+        # does not deal with None
+        if mems is None: return None
+
+        print("Length of mems: ", len(mems))
+
+        assert len(hids) == len(mems), 'len(hids) != len(mems)'
+        
+        print("Hids: ", hids[0].shape)
+        print("Mems: ", mems[0].shape, qlen, mlen, self.ext_len, self.mem_len)
+
+        # There are `mlen + qlen` steps that can be cached into mems
+        # For the next step, the last `ext_len` of the `qlen` tokens
+        # will be used as the extended context. Hence, we only cache
+        # the tokens from `mlen + qlen - self.ext_len - self.mem_len`
+        # to `mlen + qlen - self.ext_len`.
+        with torch.no_grad():
+            new_mems = []
+            end_idx = mlen + max(0, qlen - 0 - self.ext_len)
+            beg_idx = max(0, end_idx - self.mem_len)
+            for i in range(len(mems)):
+
+                cat = torch.cat([mems[i], hids[i]], dim=0)
+                print("Cat shape: ", cat.shape)
+                new_mems.append(cat[beg_idx:end_idx].detach())
+        print("New mems: ", new_mems[0].shape)
+
+        return new_mems
+
 
     def forward(self, tgt, memory,
                 tgt_mask: Optional[Tensor] = None,
@@ -261,7 +256,11 @@ class TransformerDecoderXL(nn.Module):
         output = tgt
 
         intermediate = []
-
+        hids = []
+        
+        qlen, bsz = tgt.size(0), tgt.size(1)
+        mlen = mems[0].size(0) if mems is not None else 0
+       
         if self.attn_type == 0:
             for layer in self.layers:
                 output = layer(output, memory, tgt_mask=tgt_mask,
@@ -274,6 +273,7 @@ class TransformerDecoderXL(nn.Module):
                     intermediate.append(self.norm(output))
         elif self.attn_type == 1:
             index = 0 # index for the memory
+            hids.append(tgt)
             for layer in self.layers:
                 mem_i = mems[index] if mems is not None else None
                 output = layer(output, memory, tgt_mask=tgt_mask,
@@ -282,10 +282,13 @@ class TransformerDecoderXL(nn.Module):
                             memory_key_padding_mask=memory_key_padding_mask,
                             pos=pos, query_pos=query_pos, 
                             r_w_bias=r_w_bias[index], r_r_bias=r_r_bias[index], mems=mem_i)
+                hids.append(output)
                 print("Decoder XL output shape: ", output.shape, "for layer ", index)
                 index += 1
-            if self.return_intermediate:
-                intermediate.append(self.norm(output))
+                if self.return_intermediate:
+                    intermediate.append(self.norm(output))
+            new_mems = self._update_mems(hids, mems, qlen, mlen)
+
 
         if self.norm is not None:
             output = self.norm(output)
@@ -296,7 +299,7 @@ class TransformerDecoderXL(nn.Module):
         if self.return_intermediate:
             return torch.stack(intermediate)
 
-        return output.unsqueeze(0)
+        return output.unsqueeze(0), new_mems
 
 
 class TransformerDecoderLayer(nn.Module):
@@ -507,6 +510,8 @@ class RelPartialLearnableMultiHeadAttn(RelMultiHeadAttn):
 
         #### compute attention probability
         if attn_mask is not None and attn_mask.any().item():
+            print("Attn mask shape: ", attn_mask.shape)
+            print("Attn score shape: ", attn_score.shape)
             if attn_mask.dim() == 2:
                 attn_score = attn_score.float().masked_fill(
                     attn_mask[None,:,:,None], -float('inf')).type_as(attn_score)
@@ -568,9 +573,6 @@ class RelPartialLearnableDecoderLayer(nn.Module):
                      memory_mask: Optional[Tensor] = None, tgt_key_padding_mask: Optional[Tensor] = None,
                      memory_key_padding_mask: Optional[Tensor] = None, pos: Optional[Tensor] = None,
                      query_pos: Optional[Tensor] = None, partial_query: Optional[Tensor] = None):
-        print("I am the new decoder layer!!!!!!!!!!!!!!")
-        print("Tgt shape: ", tgt.shape)
-        # TODO: replace this with relative embeddings
         tgt2 = self.self_attn(tgt, query_pos, r_w_bias, r_r_bias, attn_mask=tgt_mask, mems=mems)
         tgt = tgt + self.dropout1(tgt2)
         tgt = self.norm1(tgt)
@@ -599,7 +601,7 @@ def build_decoderXL(cfg):
         bins=cfg.MODEL.BINS,
         num_frames=cfg.DATA.SEARCH.NUMBER,
         attn_type=cfg.MODEL.DECODER.ATTN_TYPE,
-        tgt_len=5,
+        tgt_len=4,
         mem_len=cfg.MODEL.DECODER.MEM_LEN
     )
 
