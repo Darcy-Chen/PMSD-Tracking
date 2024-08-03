@@ -58,7 +58,7 @@ class SEQTRACK(nn.Module):
 
 
 
-    def forward(self, images_list=None, xz=None, seq=None, mode="encoder"):
+    def forward(self, images_list=None, xz=None, seq=None, mode="encoder", mems=None):
         """
         image_list: list of template and search images, template images should precede search images
         xz: feature from encoder
@@ -68,7 +68,9 @@ class SEQTRACK(nn.Module):
         if mode == "encoder":
             return self.forward_encoder(images_list)
         elif mode == "decoder":
-            return self.forward_decoder(xz, seq)
+            if mems is None:
+                return self.forward_decoder(xz, seq)
+            return self.forward_decoder(xz, seq, mems)
         else:
             raise ValueError
 
@@ -77,7 +79,7 @@ class SEQTRACK(nn.Module):
         xz = self.encoder(images_list)
         return xz
 
-    def forward_decoder(self, xz, sequence):
+    def forward_decoder(self, xz, sequence, mems=None):
 
         xz_mem = xz[-1]
         B, _, _ = xz_mem.shape
@@ -100,12 +102,15 @@ class SEQTRACK(nn.Module):
         if self.attn_type == 0:
             out = self.decoder(dec_mem, self.pos_embed.permute(1,0,2).expand(-1,B,-1), sequence)
             out = self.vocab_embed(out) # embeddings --> likelihood of words
-        # TODO: implement the second attention type, this output is NAN please check again
+            return out
         elif self.attn_type == 1:
-            out, mems = self.decoder(dec_mem, self.pos_embed.permute(1,0,2).expand(-1,B,-1), sequence)
-            out = self.vocab_embed(out) 
-            mems = [self.vocab_embed(mem) for mem in mems]   
-        return out, mems
+            if mems is None:
+                out, new_mems = self.decoder(dec_mem, self.pos_embed.permute(1,0,2).expand(-1,B,-1), sequence)
+            else:
+                out, new_mems = self.decoder(dec_mem, self.pos_embed.permute(1,0,2).expand(-1,B,-1), sequence, *mems)
+            out = self.vocab_embed(out)
+            # new_mems = [self.vocab_embed(mem) for mem in new_mems]
+            return out, new_mems
 
     def inference_decoder(self, xz, sequence, window=None, seq_format='xywh'):
         # Forward the decoder
@@ -155,7 +160,8 @@ class MLP(nn.Module):
 
 def build_seqtrack(cfg):
     encoder = build_encoder(cfg)
-    decoder = build_decoderXL(cfg)
+    # decoder = build_decoderXL(cfg)
+    decoder = build_decoder(cfg)
     model = SEQTRACK(
         encoder,
         decoder,

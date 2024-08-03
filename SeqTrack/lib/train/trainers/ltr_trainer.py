@@ -62,6 +62,8 @@ class LTRTrainer(BaseTrainer):
         print(self.epoch)
         print(loader.training)
 
+        mems = None
+
         for i, data in enumerate(loader, 1):
             # print("start")
             # get inputs
@@ -72,10 +74,16 @@ class LTRTrainer(BaseTrainer):
             data['settings'] = self.settings
             # forward pass
             if not self.use_amp:
-                loss, stats = self.actor(data)
+                if self.actor.attn_type == 1:
+                    loss, stats, mems = self.actor(data, mems)
+                else:
+                    loss, stats = self.actor(data)
             else:
                 with autocast():
-                    loss, stats = self.actor(data)
+                    if self.actor.attn_type == 1:
+                        loss, stats, mems = self.actor(data, mems)
+                    else:
+                        loss, stats = self.actor(data)
 
             # backward pass and update weights
             if loader.training:
@@ -98,7 +106,6 @@ class LTRTrainer(BaseTrainer):
 
             # print statistics
             self._print_stats(i, loader, batch_size)
-
 
     def train_epoch(self):
         """Do one epoch for each loader."""

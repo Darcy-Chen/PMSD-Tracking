@@ -5,6 +5,7 @@ import torch
 
 class SeqTrackActor(BaseActor):
     """ Actor for training the SeqTrack"""
+
     def __init__(self, net, objective, loss_weight, settings, cfg):
         super().__init__(net, objective)
         self.loss_weight = loss_weight
@@ -12,8 +13,9 @@ class SeqTrackActor(BaseActor):
         self.bs = self.settings.batchsize  # batch size
         self.BINS = cfg.MODEL.BINS
         self.seq_format = cfg.DATA.SEQ_FORMAT
+        self.attn_type = cfg.MODEL.DECODER.ATTN_TYPE
 
-    def __call__(self, data):
+    def __call__(self, data, mems=None):
         """
         args:
             data - The input data, should contain the fields 'template', 'search', 'search_anno'.
@@ -24,38 +26,42 @@ class SeqTrackActor(BaseActor):
             status  -  dict containing detailed losses
         """
         # forward pass
-        outputs, target_seqs, new_mem = self.forward_pass(data)
+        if self.attn_type == 0:
+            outputs, target_seqs = self.forward_pass(data)
+            # compute losses
+            loss, status = self.compute_losses(outputs, target_seqs)
+            return loss, status
+        elif self.attn_type == 1:
+            outputs, target_seqs, new_mem = self.forward_pass(data, mems)
+            # compute losses
+            loss, status = self.compute_losses(outputs, target_seqs)
+            return loss, status, new_mem
 
-        # compute losses
-        loss, status = self.compute_losses(outputs, target_seqs)
-
-        return loss, status
-
-    def forward_pass(self, data):
-        n, b, _, _, _ = data['search_images'].shape   # n,b,c,h,w
+    def forward_pass(self, data, mems=None):
+        n, b, _, _, _ = data['search_images'].shape  # n,b,c,h,w
         search_img = data['search_images'].view(-1, *data['search_images'].shape[2:])  # (n*b, c, h, w)
-        search_list = search_img.split(b,dim=0)
+        search_list = search_img.split(b, dim=0)
         template_img = data['template_images'].view(-1, *data['template_images'].shape[2:])
-        template_list = template_img.split(b,dim=0)
-        feature_xz = self.net(images_list=template_list+search_list, mode='encoder') # forward the encoder
+        template_list = template_img.split(b, dim=0)
+        feature_xz = self.net(images_list=template_list + search_list, mode='encoder')  # forward the encoder
 
-        bins = self.BINS # coorinate token
+        bins = self.BINS  # coorinate token
         # TODO: delete the start token
-        start = bins + 1 # START token
-        end = bins # End token
-        len_embedding = bins + 2 # number of embeddings, including the coordinate tokens and the special tokens
+        start = bins + 1  # START token
+        end = bins  # End token
+        len_embedding = bins + 2  # number of embeddings, including the coordinate tokens and the special tokens
 
         # box of search region
-        targets = data['search_anno'].permute(1,0,2).reshape(-1, data['search_anno'].shape[2])   # x0y0wh
-        targets = box_xywh_to_xyxy(targets)   # x0y0wh --> x0y0x1y1
-        targets = torch.max(targets, torch.tensor([0.]).to(targets)) # Truncate out-of-range values
+        targets = data['search_anno'].permute(1, 0, 2).reshape(-1, data['search_anno'].shape[2])  # x0y0wh
+        targets = box_xywh_to_xyxy(targets)  # x0y0wh --> x0y0x1y1
+        targets = torch.max(targets, torch.tensor([0.]).to(targets))  # Truncate out-of-range values
         targets = torch.min(targets, torch.tensor([1.]).to(targets))
 
         # different formats of sequence, for ablation study
         if self.seq_format != 'corner':
             targets = box_xyxy_to_cxcywh(targets)
 
-        box = (targets * (bins - 1)).int() # discretize the coordinates
+        box = (targets * (bins - 1)).int()  # discretize the coordinates
 
         if self.seq_format == 'whxy':
             box = box[:, [2, 3, 0, 1]]
@@ -64,7 +70,7 @@ class SeqTrackActor(BaseActor):
         # inpute sequence
         input_start = torch.ones([batch, 1]).to(box) * start
         input_seqs = torch.cat([input_start, box], dim=1)
-        input_seqs = input_seqs.reshape(b,n,input_seqs.shape[-1])
+        input_seqs = input_seqs.reshape(b, n, input_seqs.shape[-1])
         input_seqs = input_seqs.flatten(1)
 
         # target sequence
@@ -74,13 +80,14 @@ class SeqTrackActor(BaseActor):
         target_seqs = target_seqs.flatten()
         target_seqs = target_seqs.type(dtype=torch.int64)
 
-        outputs, new_mem = self.net(xz=feature_xz, seq=input_seqs, mode="decoder")
-        print("Outputs shape: ", len(outputs), outputs[0].shape)
+        if self.attn_type == 1:
+            outputs, new_mem = self.net(xz=feature_xz, seq=input_seqs, mode="decoder", mems=mems)
+            outputs = outputs[-1].reshape(-1, len_embedding)
+            return outputs, target_seqs, new_mem
 
-        outputs = outputs[-1].reshape(-1, len_embedding)
-        new_mem = new_mem[-1].reshape(-1, len_embedding)
-
-        return outputs, target_seqs, new_mem
+        outputs = self.net(xz=feature_xz, seq=input_seqs, mode="decoder")
+        outputs = outputs.reshape(-1, len_embedding)
+        return outputs, target_seqs
 
     def compute_losses(self, outputs, targets_seq, return_status=True):
         # Get cross entropy loss
@@ -89,8 +96,8 @@ class SeqTrackActor(BaseActor):
         outputs = outputs.softmax(-1)
         outputs = outputs[:, :self.BINS]
         value, extra_seq = outputs.topk(dim=-1, k=1)
-        boxes_pred = extra_seq.squeeze(-1).reshape(-1,5)[:, 0:-1]
-        boxes_target = targets_seq.reshape(-1,5)[:,0:-1]
+        boxes_pred = extra_seq.squeeze(-1).reshape(-1, 5)[:, 0:-1]
+        boxes_target = targets_seq.reshape(-1, 5)[:, 0:-1]
         boxes_pred = box_cxcywh_to_xyxy(boxes_pred)
         boxes_target = box_cxcywh_to_xyxy(boxes_target)
         iou = box_iou(boxes_pred, boxes_target)[0].mean()
@@ -101,10 +108,11 @@ class SeqTrackActor(BaseActor):
         smooth_l1_loss = self.objective['smooth_l1'](boxes_pred, boxes_target)
 
         # weighted sum
-        loss = (self.loss_weight['ce'] * ce_loss 
-            + self.loss_weight['giou'] * giou_loss[0]
-            + self.loss_weight['smooth_l1'] * smooth_l1_loss)
+        loss = (self.loss_weight['ce'] * ce_loss
+                + self.loss_weight['giou'] * giou_loss[0]
+                + self.loss_weight['smooth_l1'] * smooth_l1_loss)
 
+        print("Loss: ", loss)
 
         if return_status:
             # status for log
