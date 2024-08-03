@@ -72,7 +72,7 @@ class SeqTrackDecoder(nn.Module):
         query_embed = self.embedding.position_embeddings.weight.unsqueeze(1)
         query_embed = query_embed.repeat(1, bs, 1)
 
-        memory = src # the memory refers to the input image
+        memory = src
 
         tgt_mask = generate_square_subsequent_mask(len(tgt)).to(tgt.device) #generate the causal mask
 

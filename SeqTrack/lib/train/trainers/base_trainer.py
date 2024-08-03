@@ -207,12 +207,14 @@ class BaseTrainer:
             if key in ignore_fields:
                 continue
             if key == 'net':
-                encoder_dict = {k: v for k, v in checkpoint_dict[key].items() if 'encoder' in k}
-                # decoder_dict = {k: v for k, v in checkpoint_dict[key].items() if 'decoder' in k}
-
-                net_dict = net.state_dict()
-                net_dict.update(encoder_dict)  # Load only the encoder weights
-                net.load_state_dict(net_dict)
+                net.load_state_dict(checkpoint_dict[key])
+                # TODO: load only the encoder weights
+                # encoder_dict = {k: v for k, v in checkpoint_dict[key].items() if 'encoder' in k}
+                # # decoder_dict = {k: v for k, v in checkpoint_dict[key].items() if 'decoder' in k}
+                #
+                # net_dict = net.state_dict()
+                # net_dict.update(encoder_dict)  # Load only the encoder weights
+                # net.load_state_dict(net_dict)
 
             elif key == 'optimizer':
                 self.optimizer.load_state_dict(checkpoint_dict[key])

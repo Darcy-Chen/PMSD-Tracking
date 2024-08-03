@@ -86,7 +86,7 @@ class SeqTrackActor(BaseActor):
             return outputs, target_seqs, new_mem
 
         outputs = self.net(xz=feature_xz, seq=input_seqs, mode="decoder")
-        outputs = outputs.reshape(-1, len_embedding)
+        outputs = outputs[-1].reshape(-1, len_embedding)
         return outputs, target_seqs
 
     def compute_losses(self, outputs, targets_seq, return_status=True):
