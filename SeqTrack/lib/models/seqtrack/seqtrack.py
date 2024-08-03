@@ -134,6 +134,7 @@ class SEQTRACK(nn.Module):
             out = self.decoder.inference(dec_mem,
                                     self.pos_embed.permute(1,0,2).expand(-1,B,-1),
                                     sequence, self.vocab_embed)
+        #TODO: add inference for the second attention type
         elif self.attn_type == 1:
             out = self.decoder.inference(dec_mem,
                                     self.pos_embed.permute(1,0,2).expand(-1,B,-1),
