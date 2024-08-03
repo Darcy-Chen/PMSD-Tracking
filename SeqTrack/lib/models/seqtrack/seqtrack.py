@@ -10,6 +10,7 @@ from lib.utils.misc import NestedTensor
 
 from lib.models.seqtrack.encoder import build_encoder
 from .decoder import build_decoder
+from .decoder_xl import build_decoderXL
 from lib.utils.box_ops import box_xyxy_to_cxcywh
 from lib.utils.pos_embed import get_sinusoid_encoding_table, get_2d_sincos_pos_embed
 
@@ -17,7 +18,7 @@ from lib.utils.pos_embed import get_sinusoid_encoding_table, get_2d_sincos_pos_e
 class SEQTRACK(nn.Module):
     """ This is the base class for SeqTrack """
     def __init__(self, encoder, decoder, hidden_dim,
-                 bins=1000, feature_type='x', num_frames=1, num_template=1):
+                 bins=1000, feature_type='x', num_frames=1, num_template=1, attn_type=0, mem_len=0):
         """ Initializes the model.
         Parameters:
             encoder: torch module of the encoder to be used. See encoder.py
@@ -37,6 +38,7 @@ class SEQTRACK(nn.Module):
         self.num_frames = num_frames
         self.num_template = num_template
         self.feature_type = feature_type
+        self.attn_type = attn_type
 
         # Different type of visual features for decoder.
         # Since we only use one search image for now, the 'x' is same with 'x_last' here.
@@ -56,7 +58,7 @@ class SEQTRACK(nn.Module):
 
 
 
-    def forward(self, images_list=None, xz=None, seq=None, mode="encoder"):
+    def forward(self, images_list=None, xz=None, seq=None, mode="encoder", mems=None):
         """
         image_list: list of template and search images, template images should precede search images
         xz: feature from encoder
@@ -66,7 +68,9 @@ class SEQTRACK(nn.Module):
         if mode == "encoder":
             return self.forward_encoder(images_list)
         elif mode == "decoder":
-            return self.forward_decoder(xz, seq)
+            if mems is None:
+                return self.forward_decoder(xz, seq)
+            return self.forward_decoder(xz, seq, mems)
         else:
             raise ValueError
 
@@ -75,7 +79,7 @@ class SEQTRACK(nn.Module):
         xz = self.encoder(images_list)
         return xz
 
-    def forward_decoder(self, xz, sequence):
+    def forward_decoder(self, xz, sequence, mems=None):
 
         xz_mem = xz[-1]
         B, _, _ = xz_mem.shape
@@ -95,10 +99,18 @@ class SEQTRACK(nn.Module):
             dec_mem = self.bottleneck(dec_mem)  #[B,NL,D]
         dec_mem = dec_mem.permute(1,0,2)  #[NL,B,D]
 
-        out = self.decoder(dec_mem, self.pos_embed.permute(1,0,2).expand(-1,B,-1), sequence)
-        out = self.vocab_embed(out) # embeddings --> likelihood of words
-
-        return out
+        if self.attn_type == 0:
+            out = self.decoder(dec_mem, self.pos_embed.permute(1,0,2).expand(-1,B,-1), sequence)
+            out = self.vocab_embed(out) # embeddings --> likelihood of words
+            return out
+        elif self.attn_type == 1:
+            if mems is None:
+                out, new_mems = self.decoder(dec_mem, self.pos_embed.permute(1,0,2).expand(-1,B,-1), sequence)
+            else:
+                out, new_mems = self.decoder(dec_mem, self.pos_embed.permute(1,0,2).expand(-1,B,-1), sequence, *mems)
+            out = self.vocab_embed(out)
+            # new_mems = [self.vocab_embed(mem) for mem in new_mems]
+            return out, new_mems
 
     def inference_decoder(self, xz, sequence, window=None, seq_format='xywh'):
         # Forward the decoder
@@ -118,8 +130,12 @@ class SEQTRACK(nn.Module):
         if dec_mem.shape[-1] != self.hidden_dim:
             dec_mem = self.bottleneck(dec_mem)  #[B,NL,D]
         dec_mem = dec_mem.permute(1,0,2)  #[NL,B,D]
-
-        out = self.decoder.inference(dec_mem,
+        if self.attn_type == 0:
+            out = self.decoder.inference(dec_mem,
+                                    self.pos_embed.permute(1,0,2).expand(-1,B,-1),
+                                    sequence, self.vocab_embed)
+        elif self.attn_type == 1:
+            out = self.decoder.inference(dec_mem,
                                     self.pos_embed.permute(1,0,2).expand(-1,B,-1),
                                     sequence, self.vocab_embed,
                                     window, seq_format)
@@ -144,6 +160,7 @@ class MLP(nn.Module):
 
 def build_seqtrack(cfg):
     encoder = build_encoder(cfg)
+    # decoder = build_decoderXL(cfg)
     decoder = build_decoder(cfg)
     model = SEQTRACK(
         encoder,
@@ -152,7 +169,8 @@ def build_seqtrack(cfg):
         bins = cfg.MODEL.BINS,
         feature_type = cfg.MODEL.FEATURE_TYPE,
         num_frames = cfg.DATA.SEARCH.NUMBER,
-        num_template = cfg.DATA.TEMPLATE.NUMBER
+        num_template = cfg.DATA.TEMPLATE.NUMBER,
+        attn_type = cfg.MODEL.DECODER.ATTN_TYPE,
     )
 
     return model
