@@ -112,8 +112,6 @@ class SeqTrackActor(BaseActor):
                 + self.loss_weight['giou'] * giou_loss[0]
                 + self.loss_weight['smooth_l1'] * smooth_l1_loss)
 
-        print("Loss: ", loss)
-
         if return_status:
             # status for log
             status = {"Loss/total": loss.item(),
