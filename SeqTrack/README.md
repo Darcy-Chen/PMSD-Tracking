@@ -135,7 +135,8 @@ export PYTHONPATH=<path to the seqtrack project>:$PYTHONPATH
 vot evaluate --workspace . seqtrack_b256_ar
 vot analysis --nocache
 ```
-
+- CUSTOM
+python tracking/test.py seqtrack seqtrack_b256 --dataset custom --threads 2
 
 ## Test FLOPs, Params, and Speed
 ```

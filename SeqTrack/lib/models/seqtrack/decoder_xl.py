@@ -75,14 +75,13 @@ class SeqTrackDecoderXL(nn.Module):
                                                     dropout, activation, normalize_before)
         # Relative positional embeddings
         if attn_type == 1:
-            self._reset_parameters()
             decoder_layer = RelPartialLearnableDecoderLayer(d_model, nhead, dim_feedforward,
                                                             dropout, activation, normalize_before)
         decoder_norm = nn.LayerNorm(d_model)
         self.body = TransformerDecoderXL(decoder_layer, num_decoder_layers, decoder_norm,
                                          return_intermediate=return_intermediate_dec,
                                          attn_type=attn_type, ext_len=ext_len, mem_len=mem_len)
-
+        self._reset_parameters()
 
         self.d_model = d_model
         self.n_head = nhead
