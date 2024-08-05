@@ -160,25 +160,39 @@ class SeqTrackDecoderXL(nn.Module):
         return hs.transpose(1, 2)
 
     def inference(self, src, pos_embed, seq, vocab_embed,
-                  window, seq_format):
-        # flatten NxCxHxW to HWxNxC
-        n, bs, c = src.shape
+                  window, seq_format, *mems):
+
         memory = src
         confidence_list = []
         box_pos = [0, 1, 2, 3]  # the position of bounding box
         center_pos = [0, 1]  # the position of x_center and y_center
         if seq_format == 'whxy':
             center_pos = [2, 3]
+        
+        if not mems:
+            mems = self.init_mems()
+            print("Mems initialized: ", mems[0].shape)
 
-        for i in range(
-                self.num_coordinates):  # only cycle 4 times, because we do not need to predict the end token during inference
+        for i in range(self.num_coordinates):  # only cycle 4 times, because we do not need to predict the end token during inference
+            bsz, qlen = seq.size()
             tgt = self.embedding(seq).permute(1, 0, 2)
             query_embed = self.embedding.position_embeddings.weight.unsqueeze(1)
-            query_embed = query_embed.repeat(1, bs, 1)
-            tgt_mask = generate_square_subsequent_mask(len(tgt)).to(tgt.device)
+            query_embed = query_embed.repeat(1, bsz, 1)
+            if self.attn_type == 1:
+                mlen = mems[0].size(0) if mems is not None else 0  # memory length
+                klen = mlen + qlen  # key length
+                pos_seq = torch.arange(klen - 1, -1, -1.0, device=tgt.device, dtype=tgt.dtype)
+                pos_emb = self.pos_emb(pos_seq, bsz)
 
-            # TODO; add relative positional encoding
-            hs = self.body(tgt, memory, pos=pos_embed[:len(memory)], query_pos=query_embed[:len(tgt)],
+                dec_attn_mask = torch.triu(
+                    tgt.new_ones(qlen, klen), diagonal=1 + mlen).byte()[:, :, None]  # upper triangular matrix
+
+                hs, mems = self.body(tgt=tgt, memory=memory, r_w_bias=self.r_w_bias, r_r_bias=self.r_r_bias,
+                                        pos=pos_embed[:len(memory)], query_pos=query_embed[:len(tgt)], r=pos_emb,
+                                        tgt_mask=dec_attn_mask, memory_mask=None, mems=mems)
+            else:
+                tgt_mask = generate_square_subsequent_mask(len(tgt)).to(tgt.device)
+                hs = self.body(tgt, memory, pos=pos_embed[:len(memory)], query_pos=query_embed[:len(tgt)],
                            tgt_mask=tgt_mask, memory_mask=None)
 
             # embedding --> likelihood
@@ -200,6 +214,8 @@ class SeqTrackDecoderXL(nn.Module):
         out_dict['pred_boxes'] = seq[:, -self.num_coordinates:]
         out_dict['confidence'] = torch.cat(confidence_list, dim=-1)[:, :]
 
+        if self.attn_type == 1:
+            return out_dict, mems
         return out_dict
 
 

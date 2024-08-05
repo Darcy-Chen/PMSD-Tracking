@@ -112,7 +112,7 @@ class SEQTRACK(nn.Module):
             # new_mems = [self.vocab_embed(mem) for mem in new_mems]
             return out, new_mems
 
-    def inference_decoder(self, xz, sequence, window=None, seq_format='xywh'):
+    def inference_decoder(self, xz, sequence, window=None, seq_format='xywh', mems=None):
         # Forward the decoder
         xz_mem = xz[-1]
         B, _, _ = xz_mem.shape
@@ -135,14 +135,21 @@ class SEQTRACK(nn.Module):
                                     self.pos_embed.permute(1,0,2).expand(-1,B,-1),
                                     sequence, self.vocab_embed, 
                                     window, seq_format)
+            return out
         #TODO: add inference for the second attention type
         elif self.attn_type == 1:
-            out = self.decoder.inference(dec_mem,
+            if mems is not None: 
+                out, new_mems = self.decoder.inference(dec_mem,
+                                    self.pos_embed.permute(1,0,2).expand(-1,B,-1),
+                                    sequence, self.vocab_embed,
+                                    window, seq_format, *mems)
+            else:
+                out, new_mems = self.decoder.inference(dec_mem,
                                     self.pos_embed.permute(1,0,2).expand(-1,B,-1),
                                     sequence, self.vocab_embed,
                                     window, seq_format)
 
-        return out
+            return out, new_mems
 
 
 

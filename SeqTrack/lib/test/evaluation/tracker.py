@@ -132,6 +132,7 @@ class Tracker:
 
         _store_outputs(out, init_default)
 
+        mems = None
         for frame_num, frame_path in enumerate(seq.frames[1:], start=1):
             image = self._read_image(frame_path)
 
@@ -140,7 +141,7 @@ class Tracker:
             info = seq.frame_info(frame_num)
             info['previous_output'] = prev_output
 
-            out = tracker.track(image, info)
+            out, mems = tracker.track(image, info, mems)
             prev_output = OrderedDict(out)
             _store_outputs(out, {'time': time.time() - start_time})
 

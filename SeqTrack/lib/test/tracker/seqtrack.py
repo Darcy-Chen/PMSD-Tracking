@@ -5,7 +5,7 @@ import cv2
 from lib.utils.box_ops import box_xywh_to_xyxy, box_xyxy_to_cxcywh
 from lib.models.seqtrack import build_seqtrack
 from lib.test.tracker.seqtrack_utils import Preprocessor
-from lib.utils.box_ops import clip_box
+from lib.utils.box_ops import clip_box, box_xyxy_to_cxcywh
 import numpy as np
 
 
@@ -47,7 +47,6 @@ class SEQTRACK(BaseTracker):
 
 
     def initialize(self, image, info: dict):
-
         # get the initial templates
         z_patch_arr, _ = sample_target(image, info['init_bbox'], self.params.template_factor,
                                        output_sz=self.params.template_size)
@@ -58,11 +57,11 @@ class SEQTRACK(BaseTracker):
         # get the initial sequence i.e., [start]
         batch = template.shape[0]
         self.init_seq = (torch.ones([batch, 1]).to(template) * self.start).type(dtype=torch.int64)
-
         self.state = info['init_bbox']
+
         self.frame_id = 0
 
-    def track(self, image, info: dict = None):
+    def track(self, image, info: dict = None, mems=None):
         H, W, _ = image.shape
         self.frame_id += 1
         x_patch_arr, resize_factor = sample_target(image, self.state, self.params.search_factor,
@@ -76,10 +75,11 @@ class SEQTRACK(BaseTracker):
 
         # run the decoder
         with torch.no_grad():
-            out_dict = self.network.inference_decoder(xz=xz,
+            out_dict, new_mem = self.network.inference_decoder(xz=xz,
                                                       sequence=self.init_seq,
                                                       window=self.hanning,
-                                                      seq_format=self.seq_format)
+                                                      seq_format=self.seq_format, 
+                                                      mems=mems)
 
         pred_boxes = out_dict['pred_boxes'].view(-1, 4)
 
@@ -115,7 +115,7 @@ class SEQTRACK(BaseTracker):
             cv2.imshow('vis', image_BGR)
             cv2.waitKey(1)
 
-        return {"target_bbox": self.state}
+        return {"target_bbox": self.state}, new_mem
 
     def map_box_back(self, pred_box: list, resize_factor: float):
         cx_prev, cy_prev = self.state[0] + 0.5 * self.state[2], self.state[1] + 0.5 * self.state[3]

@@ -133,12 +133,9 @@ def save_labeled_image(directory, labels, save_dir):
     print("Done")
 
 
-dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/test/4/img'
-save_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/4'
-labels = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/4.txt'
-# dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/aug/24/img'
-# labels = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/aug/24/label/label.txt'
-# save_dir = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/aug/24/groundtruth'
+dir = '/home/darcy/PMSD-Tracking/SeqTrack/data/custom/test/5/img'
+save_dir = '/home/darcy/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/5'
+labels = '/home/darcy/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/5.txt'
 
 save_labeled_image(dir, labels, save_dir)
 
@@ -176,7 +173,7 @@ def calculate_IoU(prediction, ground_truth):
     truth.close()
 
     IoU = np.array(iou)
-    np.savetxt('/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/IoU.txt',
+    np.savetxt('/home/darcy/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/5/IoU.txt',
                IoU, fmt="%f")
 
     plt.plot(IoU)
@@ -185,13 +182,13 @@ def calculate_IoU(prediction, ground_truth):
     plt.xlabel("Frame")
     plt.ylim(0.0, 1.0)
     plt.ylabel("IoU")
-    plt.show()
+    plt.savefig('/home/darcy/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/5/IoU.png')
     # b = np.loadtxt('test1.txt', dtype=int)
 
 
-# prediction = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/1.txt'
-# ground_truth = '/home/darcy/PycharmProjects/PMSD-Tracking/SeqTrack/data/custom/test/1/label/label.txt'
-# calculate_IoU(prediction, ground_truth)
+prediction = '/home/darcy/PMSD-Tracking/SeqTrack/test/tracking_results/seqtrack/seqtrack_b256/custom/5.txt'
+ground_truth = '/home/darcy/PMSD-Tracking/SeqTrack/data/custom/test/5/label/label.txt'
+calculate_IoU(prediction, ground_truth)
  
 
 def convert_masks(img_dir, plague_dir, save_dir):

@@ -67,11 +67,11 @@ class SeqTrackActor(BaseActor):
             box = box[:, [2, 3, 0, 1]]
 
         batch = box.shape[0]
-        # inpute sequence
+        # input sequence
         input_start = torch.ones([batch, 1]).to(box) * start
         input_seqs = torch.cat([input_start, box], dim=1)
         input_seqs = input_seqs.reshape(b, n, input_seqs.shape[-1])
-        input_seqs = input_seqs.flatten(1)
+        input_seqs = input_seqs.flatten(1) # (bsz, qlen)
 
         # target sequence
         target_end = torch.ones([batch, 1]).to(box) * end
